@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  background: #020617;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  background: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: inherit;
+  color: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.35);
+  color: white;
+}
+
+textarea,
+input,
+button {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}

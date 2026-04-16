@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/chatassistant.tsx","./src/components/loadingdots.tsx","./src/components/notessummarizer.tsx","./src/components/quizgenerator.tsx","./src/components/sidebar.tsx","./src/lib/gemini.ts","./src/lib/prompts.ts","./src/lib/storage.ts","./src/lib/supabase.ts"],"version":"5.9.3"}

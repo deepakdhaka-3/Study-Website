@@ -1,13 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, HelpCircle, Sparkles } from 'lucide-react';
 import { LoadingDots } from './LoadingDots';
-import { generateQuiz as generateQuizFromGemini, normalizeQuizQuestions } from '@/lib/gemini';
-import { quizSystemPrompt } from '@/lib/prompts';
-import { searchKnowledgeEntries } from '@/lib/supabase';
-import type { QuizQuestion, QuizResult } from '@/types';
+import { generateQuizFromContent, generateQuizFromPdf, normalizeQuizQuestions } from '@/lib/gemini';
+import type { QuizResult } from '@/types';
 
 export function QuizGenerator() {
-  const [topic, setTopic] = useState('');
+  const [content, setContent] = useState('');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [quiz, setQuiz] = useState<QuizResult | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(false);
@@ -25,9 +24,9 @@ export function QuizGenerator() {
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmed = topic.trim();
-    if (!trimmed) {
-      setError('Please enter a topic first.');
+    const trimmed = content.trim();
+    if (!trimmed && !pdfFile) {
+      setError('Please paste notes/content or upload a PDF file first.');
       return;
     }
 
@@ -37,25 +36,13 @@ export function QuizGenerator() {
     setAnswers({});
 
     try {
-      const entries = await searchKnowledgeEntries(trimmed, 8);
-
-      if (entries.length === 0) {
-        setQuiz(null);
-        setError('No matching Supabase records were found for that topic. Add knowledge entries first, then try again.');
-        return;
-      }
-
-      const context = entries
-        .map((entry, index) => {
-          return [`Record ${index + 1}`, `Topic: ${entry.topic || 'General'}`, `Question: ${entry.question}`, `Answer: ${entry.answer}`].join('\n');
-        })
-        .join('\n\n');
-
-      const result = await generateQuizFromGemini(trimmed, context, quizSystemPrompt);
+      const result = pdfFile
+        ? await generateQuizFromPdf(pdfFile, trimmed)
+        : await generateQuizFromContent(trimmed);
       const normalized = normalizeQuizQuestions(result.questions).slice(0, 10);
 
       setQuiz({
-        topic: result.topic || trimmed,
+        topic: result.topic || 'Study Quiz',
         questions: normalized.length > 0 ? normalized : normalizeQuizQuestions(result.questions),
       });
     } catch (generateError) {
@@ -75,33 +62,43 @@ export function QuizGenerator() {
 
   return (
     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-4 shadow-2xl shadow-cyan-950/20 backdrop-blur xl:p-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">
+      <div className="rounded-[2rem] border border-green-500/10 bg-gradient-to-br from-slate-950/80 to-slate-900/60 p-4 shadow-2xl shadow-green-950/10 backdrop-blur xl:p-6">
+        <div className="inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-green-200">
           <Sparkles className="h-3.5 w-3.5" />
           Quiz Generator
         </div>
-        <h2 className="mt-3 text-2xl font-semibold text-white">Generate multiple-choice questions from database content</h2>
-        <p className="mt-1 text-sm text-slate-400">Enter a topic, retrieve matching knowledge from Supabase, and let Gemini build a study quiz.</p>
+        <h2 className="mt-3 text-2xl font-bold text-white">Test Your Knowledge</h2>
+        <p className="mt-1 text-sm text-slate-400">Paste notes/content or upload a PDF and Study Guru will create moderate-level MCQs.</p>
 
-        <form onSubmit={handleGenerate} className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <input
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            placeholder="Example: photosynthesis, Python loops, cell division"
-            className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-400/40 focus:bg-white/8"
+        <form onSubmit={handleGenerate} className="mt-5 flex flex-col gap-3">
+          <textarea
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            rows={5}
+            placeholder="Paste notes, chapter text, or key concepts here..."
+            className="w-full rounded-xl border border-green-500/20 bg-green-950/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-green-400/40 focus:bg-green-950/30 focus:ring-1 focus:ring-green-500/20"
           />
+          <label className="inline-flex items-center gap-2 rounded-xl border border-green-500/20 bg-green-950/20 px-3 py-2 text-sm text-slate-200">
+            <span className="font-semibold">Upload PDF (optional)</span>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(event) => setPdfFile(event.target.files?.[0] || null)}
+              className="block text-xs text-slate-300 file:mr-2 file:rounded-lg file:border-0 file:bg-green-500/20 file:px-2 file:py-1 file:text-xs file:text-green-100"
+            />
+          </label>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-3 text-sm font-bold text-white transition hover:from-green-400 hover:to-emerald-400 disabled:opacity-50 sm:w-fit"
           >
             <HelpCircle className="h-4 w-4" />
-            Build quiz
+            Generate Quiz
           </button>
         </form>
 
         {error ? (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
             <AlertTriangle className="h-4 w-4" />
             {error}
           </div>
@@ -109,7 +106,7 @@ export function QuizGenerator() {
 
         <div className="mt-5 space-y-4">
           {loading ? (
-            <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-5">
+            <div className="rounded-2xl border border-green-500/20 bg-green-950/40 p-5">
               <LoadingDots />
             </div>
           ) : null}
@@ -121,14 +118,14 @@ export function QuizGenerator() {
                 const selectedAnswer = answers[index];
 
                 return (
-                  <article key={`${question.question}-${index}`} className="rounded-3xl border border-white/10 bg-slate-900/80 p-5">
+                  <article key={`${question.question}-${index}`} className="rounded-2xl border border-green-500/20 bg-green-950/40 p-5">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="text-base font-medium text-white">
                         {index + 1}. {question.question}
                       </h3>
                       {submitted ? (
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isCorrect ? 'bg-emerald-400/15 text-emerald-200' : 'bg-rose-400/15 text-rose-200'}`}>
-                          {isCorrect ? 'Correct' : 'Incorrect'}
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${isCorrect ? 'bg-green-400/15 text-green-200' : 'bg-rose-400/15 text-rose-200'}`}>
+                          {isCorrect ? '✓ Correct' : '✗ Wrong'}
                         </span>
                       ) : null}
                     </div>
@@ -143,12 +140,12 @@ export function QuizGenerator() {
                             key={`${question.question}-${option}`}
                             type="button"
                             onClick={() => setAnswers((current) => ({ ...current, [index]: optionIndex }))}
-                            className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                            className={`rounded-xl border px-4 py-3 text-left text-sm transition font-medium ${
                               correct
-                                ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100'
+                                ? 'border-green-400/40 bg-green-400/15 text-green-100'
                                 : active
-                                  ? 'border-cyan-400/40 bg-cyan-400/15 text-white'
-                                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10'
+                                  ? 'border-blue-400/40 bg-blue-400/15 text-white'
+                                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-blue-400/30 hover:bg-blue-950/20'
                             }`}
                           >
                             {option}
@@ -158,8 +155,8 @@ export function QuizGenerator() {
                     </div>
 
                     {submitted ? (
-                      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                        <p className="font-semibold text-white">Answer: {question.options[question.answerIndex]}</p>
+                      <div className="mt-4 rounded-xl border border-green-500/20 bg-green-950/30 p-4 text-sm text-slate-200">
+                        <p className="font-bold text-green-200">✓ Correct Answer: {question.options[question.answerIndex]}</p>
                         <p className="mt-2 leading-6 text-slate-300">{question.explanation}</p>
                       </div>
                     ) : null}
@@ -170,43 +167,47 @@ export function QuizGenerator() {
               <button
                 type="button"
                 onClick={handleSubmitQuiz}
-                className="inline-flex items-center gap-2 rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-5 py-3 text-sm font-bold text-white transition hover:from-blue-400 hover:to-purple-400"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Submit answers
+                Submit Answers
               </button>
             </>
           ) : (
-            <div className="rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-6 text-sm leading-6 text-slate-400">
-              Create a quiz after the app finds related Supabase records. Your final score appears after submission.
+            <div className="rounded-2xl border border-dashed border-green-500/20 bg-green-950/20 p-8 text-center">
+              <HelpCircle className="mx-auto h-10 w-10 text-green-400/40 mb-3" />
+              <p className="text-slate-400 text-sm">Generate a quiz to test your understanding. You'll see your score and explanations after submission.</p>
             </div>
           )}
         </div>
       </div>
 
-      <aside className="rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-cyan-950/10 backdrop-blur xl:p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-400">Scoreboard</h3>
-        <div className="mt-4 rounded-3xl border border-white/10 bg-slate-950/70 p-5 text-white">
+      <aside className="rounded-[2rem] border border-green-500/10 bg-gradient-to-br from-green-950/30 to-slate-950/30 p-4 shadow-2xl shadow-green-950/10 backdrop-blur xl:p-5">
+        <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-green-300">Your Score</h3>
+        <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-950/40 p-5 text-white">
           {quiz && submitted ? (
             <>
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Final score</p>
-              <p className="mt-3 text-4xl font-semibold">{score}/{quiz.questions.length}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                Topic: {quiz.topic}
+              <p className="text-xs uppercase tracking-[0.2em] text-green-200 font-bold">Final Score</p>
+              <p className="mt-3 text-5xl font-bold text-green-300">{score}/{quiz.questions.length}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-300">
+                <span className="font-semibold text-white">Topic:</span> {quiz.topic}
               </p>
+              <div className="mt-4 rounded-lg bg-green-400/10 px-3 py-2 text-xs text-green-200">
+                {score === quiz.questions.length ? '🎉 Perfect Score!' : `${Math.round((score / quiz.questions.length) * 100)}% Correct`}
+              </div>
             </>
           ) : (
             <>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Waiting for submission</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Answer & Submit</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Answer the questions, then submit to reveal the score and the correct answers.
+                Answer all questions, then submit to see your score and detailed explanations for each question.
               </p>
             </>
           )}
         </div>
 
-        <div className="mt-4 rounded-3xl border border-white/10 bg-slate-950/70 p-5 text-sm leading-6 text-slate-300">
-          Quiz generation depends on the Supabase records returned for the topic. If no records are available, the app asks you to add them first.
+        <div className="mt-4 rounded-xl border border-green-500/20 bg-green-950/30 p-4 text-sm leading-6 text-slate-300">
+          💡 <span className="font-semibold text-slate-200">Pro Tip:</span> Review wrong answers to strengthen your understanding.
         </div>
       </aside>
     </section>

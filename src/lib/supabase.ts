@@ -4,13 +4,13 @@ import type { KnowledgeEntry } from '@/types';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export async function searchKnowledgeEntries(query: string, limit = 6): Promise<KnowledgeEntry[]> {
+  if (!supabase) {
+    throw new Error('Missing Supabase environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.');
+  }
+
   const trimmed = query.trim();
 
   if (!trimmed) {

@@ -1,12 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { AlertTriangle, CheckCircle2, HelpCircle, Sparkles } from 'lucide-react';
 import { LoadingDots } from './LoadingDots';
-import { generateQuizFromContent, generateQuizFromPdf, normalizeQuizQuestions } from '@/lib/gemini';
+import { generateQuizFromContent, normalizeQuizQuestions } from '@/lib/gemini';
 import type { QuizResult } from '@/types';
 
 export function QuizGenerator() {
   const [content, setContent] = useState('');
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [quiz, setQuiz] = useState<QuizResult | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(false);
@@ -25,8 +24,8 @@ export function QuizGenerator() {
     event.preventDefault();
 
     const trimmed = content.trim();
-    if (!trimmed && !pdfFile) {
-      setError('Please paste notes/content or upload a PDF file first.');
+    if (!trimmed) {
+      setError('Please paste notes/content first.');
       return;
     }
 
@@ -36,9 +35,7 @@ export function QuizGenerator() {
     setAnswers({});
 
     try {
-      const result = pdfFile
-        ? await generateQuizFromPdf(pdfFile, trimmed)
-        : await generateQuizFromContent(trimmed);
+      const result = await generateQuizFromContent(trimmed);
       const normalized = normalizeQuizQuestions(result.questions).slice(0, 10);
 
       setQuiz({
@@ -68,7 +65,7 @@ export function QuizGenerator() {
           Quiz Generator
         </div>
         <h2 className="mt-3 text-2xl font-bold text-white">Test Your Knowledge</h2>
-        <p className="mt-1 text-sm text-slate-400">Paste notes/content or upload a PDF and Study Guru will create moderate-level MCQs.</p>
+        <p className="mt-1 text-sm text-slate-400">Paste notes/content and Study Guru will create moderate-level MCQs.</p>
 
         <form onSubmit={handleGenerate} className="mt-5 flex flex-col gap-3">
           <textarea
@@ -78,15 +75,6 @@ export function QuizGenerator() {
             placeholder="Paste notes, chapter text, or key concepts here..."
             className="w-full rounded-xl border border-green-500/20 bg-green-950/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-green-400/40 focus:bg-green-950/30 focus:ring-1 focus:ring-green-500/20"
           />
-          <label className="inline-flex items-center gap-2 rounded-xl border border-green-500/20 bg-green-950/20 px-3 py-2 text-sm text-slate-200">
-            <span className="font-semibold">Upload PDF (optional)</span>
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(event) => setPdfFile(event.target.files?.[0] || null)}
-              className="block text-xs text-slate-300 file:mr-2 file:rounded-lg file:border-0 file:bg-green-500/20 file:px-2 file:py-1 file:text-xs file:text-green-100"
-            />
-          </label>
           <button
             type="submit"
             disabled={loading}

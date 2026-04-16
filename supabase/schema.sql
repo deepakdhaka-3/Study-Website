@@ -26,9 +26,18 @@ create table if not exists public.quiz_attempts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.chat_memory (
+  id uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists knowledge_entries_topic_idx on public.knowledge_entries using btree (lower(coalesce(topic, '')));
 create index if not exists knowledge_entries_question_trgm_idx on public.knowledge_entries using gin (question gin_trgm_ops);
 create index if not exists knowledge_entries_answer_trgm_idx on public.knowledge_entries using gin (answer gin_trgm_ops);
+create index if not exists chat_memory_session_idx on public.chat_memory using btree (session_id, created_at);
 create index if not exists knowledge_entries_search_idx on public.knowledge_entries using gin (
   to_tsvector('english', coalesce(topic, '') || ' ' || coalesce(question, '') || ' ' || coalesce(answer, ''))
 );
@@ -74,6 +83,7 @@ $$;
 
 alter table public.knowledge_entries enable row level security;
 alter table public.quiz_attempts enable row level security;
+alter table public.chat_memory enable row level security;
 
 drop policy if exists "knowledge_entries_read" on public.knowledge_entries;
 create policy "knowledge_entries_read"
@@ -92,6 +102,20 @@ using (true);
 drop policy if exists "quiz_attempts_insert" on public.quiz_attempts;
 create policy "quiz_attempts_insert"
 on public.quiz_attempts
+for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "chat_memory_read" on public.chat_memory;
+create policy "chat_memory_read"
+on public.chat_memory
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "chat_memory_insert" on public.chat_memory;
+create policy "chat_memory_insert"
+on public.chat_memory
 for insert
 to anon, authenticated
 with check (true);

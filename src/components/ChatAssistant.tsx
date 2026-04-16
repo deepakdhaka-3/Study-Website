@@ -4,8 +4,10 @@ import type { ChatMessage } from '@/types';
 import { LoadingDots } from './LoadingDots';
 import { askDoubt } from '@/lib/gemini';
 import { readStorage, writeStorage } from '@/lib/storage';
+import { appendChatSessionMemory, getChatSessionMemory, isSupabaseConfigured } from '@/lib/supabase';
 
 const CHAT_HISTORY_KEY = 'study-guru.chat-history';
+const CHAT_SESSION_KEY = 'study-guru.chat-session-id';
 
 const actionSuggestions = [
   { icon: BookMarked, label: 'Summarize this', color: 'from-purple-500/20 to-purple-500/5' },
@@ -17,7 +19,47 @@ export function ChatAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => readStorage(CHAT_HISTORY_KEY, [] as ChatMessage[]));
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncingHistory, setIsSyncingHistory] = useState(false);
   const [error, setError] = useState('');
+
+  const [sessionId] = useState(() => {
+    const saved = readStorage(CHAT_SESSION_KEY, '');
+    if (saved) {
+      return saved;
+    }
+
+    const next = crypto.randomUUID();
+    writeStorage(CHAT_SESSION_KEY, next);
+    return next;
+  });
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      return;
+    }
+
+    let active = true;
+
+    async function loadSessionHistory() {
+      setIsSyncingHistory(true);
+      const remoteMessages = await getChatSessionMemory(sessionId);
+
+      if (!active || remoteMessages.length === 0) {
+        setIsSyncingHistory(false);
+        return;
+      }
+
+      setMessages(remoteMessages);
+      writeStorage(CHAT_HISTORY_KEY, remoteMessages);
+      setIsSyncingHistory(false);
+    }
+
+    void loadSessionHistory();
+
+    return () => {
+      active = false;
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     writeStorage(CHAT_HISTORY_KEY, messages);
@@ -44,10 +86,15 @@ export function ChatAssistant() {
     const nextMessages: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: 'user', content: question }];
     setMessages(nextMessages);
 
+    void appendChatSessionMemory(sessionId, nextMessages[nextMessages.length - 1]);
+
     try {
       const response = await askDoubt(question);
 
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', content: response }]);
+      const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: response };
+      setMessages((current) => [...current, assistantMessage]);
+
+      void appendChatSessionMemory(sessionId, assistantMessage);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Something went wrong. Please try again.');
     } finally {
@@ -75,6 +122,12 @@ export function ChatAssistant() {
         </div>
 
         <div className="mb-4 max-h-[58vh] space-y-4 overflow-y-auto pr-1">
+          {isSyncingHistory ? (
+            <div className="rounded-2xl border border-blue-500/20 bg-blue-950/30 px-4 py-3 text-xs text-blue-200">
+              Syncing your session memory from Supabase...
+            </div>
+          ) : null}
+
           {messages.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-blue-500/20 bg-blue-950/30 p-8 text-center">
               <Sparkles className="mx-auto h-12 w-12 text-blue-400/40 mb-3" />

@@ -5,15 +5,18 @@ type ErrorResponse = { error?: string };
 async function parseError(response: Response): Promise<never> {
   let message = 'Request failed.';
 
-  try {
-    const payload = (await response.json()) as ErrorResponse;
-    if (payload?.error) {
-      message = payload.error;
-    }
-  } catch {
-    const text = await response.text();
-    if (text) {
-      message = text;
+  const rawText = await response.text();
+
+  if (rawText) {
+    try {
+      const payload = JSON.parse(rawText) as ErrorResponse;
+      if (payload?.error) {
+        message = payload.error;
+      } else {
+        message = rawText;
+      }
+    } catch {
+      message = rawText;
     }
   }
 
